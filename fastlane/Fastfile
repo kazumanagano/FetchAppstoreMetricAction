@@ -1,0 +1,40 @@
+require 'spaceship'
+require 'active_support'
+
+import("BaseFastfile")
+import("TestFastfile")
+
+before_all do |lane, options|
+  ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"] ||= cocoapods_keys(key_name: "AppStoreConnectApiIssureId")
+  ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"] ||= cocoapods_keys(key_name: "AppStoreConnectApiKeyId")
+  ENV["APP_STORE_CONNECT_API_KEY_KEY_FILEPATH"] = "certs/auth_key.p8"
+  ENV["DATADOG_API_KEY"] = "AsdfQwer123-"
+  ENV['TZ'] = "Asia/Tokyo"
+end
+
+desc "send appstore metric to datadog"
+lane :send_appstore_metric_to_datadog do |options|
+  metrics = fetch_appstore_metric.map { |data| data["metrics"] }.flatten
+  metrics.each do |metric|
+    name = metric["identifier"]
+    unit = metric["unit"]
+    datasets = metric["datasets"]
+    datasets.each do |dataset|
+      points = dataset["points"][0]
+      criteria = dataset["filterCriteria"]
+      puts "#{name} #{criteria["percentile"]}: #{points["value"]}"
+      emit_metric_point(
+        point: points["value"],
+        metric: "com.example.app.#{name}",
+        tags: {
+          "version": points["version"],
+          "device": criteria["device"],
+          "percentile": criteria["percentile"],
+          "unit": unit["displayName"]
+        }
+      )
+    end
+  end
+end
+
+# vim: ai ts=2 sts=2 et sw=2 ft=ruby syntax=ruby
